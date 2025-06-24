@@ -24,4 +24,6 @@
 
 - [Idea使用技巧](/ProjectMD/idea使用技巧.md)
 
+- [每日分享](/usefull/每日分享.md)
+
 
