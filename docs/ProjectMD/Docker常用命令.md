@@ -241,3 +241,172 @@ docker run --name='activemq' -itd -p 8161:8161 -p 61616:61616 -p 61618:61618 -e 
 ```
 
 需要修改activemq.xml的话，进入容器到/opt/activemq/conf/activemq.xml修改。
+
+
+## docker-compose系列
+1. kafka-ui、kafka、zookeeper
+```
+version: "3.8"
+services:
+  zhyy-zookeeper:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/bitnami/zookeeper:3.8.3
+    container_name: zhyy-zookeeper
+    hostname: zhyy-zookeeper
+    user: root  # 以 root 身份运行
+    networks:
+      - kafka-net  # 网络名称
+    privileged: true
+    restart: always
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: yes
+    volumes:
+      - ./zookeeper/data:/opt/bitnami/zookeeper/data
+      - ./zookeeper/logs:/opt/bitnami/zookeeper/logs
+      - ./zookeeper/conf/zoo.cfg:/opt/bitnami/zookeeper/conf/zoo.cfg
+    ports:
+      - "12181:2181"
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 200M
+
+  zhyy-kafka:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/bitnami/kafka:3.7
+    container_name: zhyy-kafka
+    hostname: zhyy-kafka
+    networks:
+      - kafka-net  
+    privileged: true
+    restart: always
+    environment:
+      KAFKA_CFG_ZOOKEEPER_CONNECT: 'zhyy-zookeeper:2181'
+    volumes:
+      - ./kafka/data:/opt/bitnami/kafka/data
+    ports:
+      - "9092:9092"
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 200M
+    depends_on:
+      - zhyy-zookeeper
+
+  kafka-ui:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/provectuslabs/kafka-ui:v0.7.2
+    container_name: zhyy-kafka-ui
+    hostname: zhyy-kafka-ui
+    privileged: true
+    restart: always
+    environment:
+      - DYNAMIC_CONFIG_ENABLED=true
+      - AUTH_TYPE=LOGIN_FORM
+      - SPRING_SECURITY_USER_NAME=admin
+      - SPRING_SECURITY_USER_PASSWORD=admin123
+      - KAFKA_CLUSTERS_0_NAME= 公司测试kafka
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=zhyy-kafka:9092  # 添加 Kafka 连接配置
+      - KAFKA_CLUSTERS_0_ZOOKEEPER=zhyy-zookeeper:2181     # 添加 ZooKeeper 连接配置
+    ports:
+      - "8080:8080"
+    networks:
+      - kafka-net  # 网络名称
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+
+networks:
+  kafka-net:  # 网络定义
+    driver: bridge
+
+```
+2. MySQL
+```
+version: '3'
+  my-mysql:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:8.0
+    ports:
+      - "3306:3306"
+    volumes:
+      - "./mysql/data:/var/lib/mysql"
+      - "./mysql/my.cnf:/etc/my.cnf"
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      TZ: Asia/Shanghai
+    restart: always
+    container_name: my-mysql
+```
+my.cnf
+```
+[mysqld]
+datadir=/var/lib/mysql
+socket=/var/lib/mysql/mysql.sock
+
+symbolic-links=0
+# 忽略表名大小写，0不忽略，1忽略
+lower_case_table_names=1
+
+sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
+default-storage-engine=INNODB
+character-set-server=utf8
+collation-server=utf8_general_ci
+
+skip-name-resolve
+
+[mysqld_safe]
+log-error=/var/log/mysqld.log
+pid-file=/var/run/mysqld/mysqld.pid
+
+[client]
+default-character-set=utf8
+```
+3. Redis
+```
+version: '3'
+services:
+  redis:
+  image: redis:7.2.3
+  container_name: redis
+  restart: always
+  ports:
+    - "6379:6379"
+  volumes:
+    - ./redis/conf:/etc/redis/redis_default.conf
+    - ./redis/data/:/data
+  environment:
+    TZ: "Asia/Shanghai"
+    command: redis-server --port 6379 --requirepass 123456 --appendonly yes
+  securiyt_opt:
+    - seccomp:unconfined
+```
+
+4. Minio
+```
+version: '3'
+services:
+  minio:
+    image: 
+    container_name: minio
+    ports:
+      - "9090:9090"
+      - "9090:9090"
+    environment:
+      MINIO_ROOT_USER: root
+      MINIO_ROOT_PASSWORD: 123456
+    volumes:
+      - ./minio:/data
+      - ./config:/root/.minio
+    command: server /data --console-address ":9090"
+    security_opt:
+      - seccomp:unconfined
+```
